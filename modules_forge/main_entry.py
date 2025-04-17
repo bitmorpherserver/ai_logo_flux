@@ -399,7 +399,7 @@ def on_preset_change(preset=None):
             gr.update(visible=True, value='Queue'),                                     # ui_forge_async_loading
             gr.update(visible=True, value='CPU'),                                       # ui_forge_pin_shared_memory
             gr.update(visible=True, value=model_mem),                                   # ui_forge_inference_memory
-            gr.update(value=getattr(shared.opts, "flux_t2i_width", 896)),               # ui_txt2img_width
+            gr.update(value=getattr(shared.opts, "flux_t2i_width", 896)),               # ui_txt2img_widthgit lfs install
             gr.update(value=getattr(shared.opts, "flux_i2i_width", 1024)),              # ui_img2img_width
             gr.update(value=getattr(shared.opts, "flux_t2i_height", 1152)),             # ui_txt2img_height
             gr.update(value=getattr(shared.opts, "flux_i2i_height", 1024)),             # ui_img2img_height
