@@ -61,7 +61,7 @@ class CheckpointUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataE
         self.sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'Flux', 'Unknown'], value='Unknown', label='Base model', interactive=True)
 
         with gr.Row():
-            self.select_vae = gr.Dropdown(choices=modules_list, value=None, label="Preferred VAE / Text encoder(s)", elem_id="checpoint_edit_user_metadata_preferred_vae", multiselect=True)
+            self.select_vae = gr.Dropdown(choices=modules_list, value=["clip_l.safetensors", "t5xxl_fp16.safetensors", "diffusion_pytorch_model.safetensors"], label="Preferred VAE / Text encoder(s)", elem_id="checpoint_edit_user_metadata_preferred_vae", multiselect=True)
             self.refresh = ToolButton(refresh_symbol)
             
             self.refresh.click(fn=refreshModules, outputs=self.select_vae, show_progress='hidden')

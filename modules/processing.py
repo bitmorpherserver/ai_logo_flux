@@ -1632,6 +1632,16 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         return res
 
+@dataclass
+class StableDiffusionProcessingTxt2Logo(StableDiffusionProcessingTxt2Img):
+    prompt: str = ""
+    brand_name: str = ""
+    batch_size: int = 1
+    style_id: int = 1
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.prompt = f"{self.prompt} for brand {self.brand_name} in style {self.style_id}".strip()
 
 @dataclass(repr=False)
 class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
