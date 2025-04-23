@@ -3,6 +3,8 @@ import requests
 
 # app = FastAPI()
 
+
+
 txt2img_styles_res = requests.get('https://photolab-ai.com/media/giff/ai/txt2img_styles/txt2img_styles.json')
 styles_dict = txt2img_styles_res.json()
 
