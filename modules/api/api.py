@@ -3,6 +3,8 @@ import io
 import os
 import time
 import datetime
+from time import process_time
+
 import uvicorn
 import ipaddress
 import requests
@@ -20,7 +22,7 @@ import modules.shared as shared
 from modules import sd_samplers, deepbooru, images, scripts, ui, postprocessing, errors, restart, shared_items, script_callbacks, infotext_utils, sd_models, sd_schedulers
 from modules.api import models
 from modules.shared import opts
-from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessingImg2Img, process_images, process_extra_images
+from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessingTxt2Logo, StableDiffusionProcessingImg2Img, process_images, process_extra_images
 import modules.textual_inversion.textual_inversion
 from modules.shared import cmd_opts
 
@@ -196,6 +198,10 @@ def api_middleware(app: FastAPI):
         return handle_exception(request, e)
 
 
+txt2logo_styles_result = requests.get('https://photolab-ai.com/media/giff/ai/txt2img_styles/txt2img_styles.json')
+styles_dict = txt2logo_styles_result.json()
+
+
 class Api:
     def __init__(self, app: FastAPI, queue_lock: Lock):
         if shared.cmd_opts.api_auth:
@@ -270,7 +276,6 @@ class Api:
         self.embedding_db = modules.textual_inversion.textual_inversion.EmbeddingDatabase()
         self.embedding_db.add_embedding_dir(cmd_opts.embeddings_dir)
         self.embedding_db.load_textual_inversion_embeddings(force_reload=True, sync_with_sd_model=False)
-
 
 
     def add_api_route(self, path: str, endpoint, **kwargs):
@@ -439,8 +444,86 @@ class Api:
                     continue
 
                 mentioned_script_args[index] = value
-
         return params
+
+    def text2logoapi(self, txt2logoreq: models.StableDiffusionProcessingTxt2Logo):
+        task_id = txt2logoreq.force_task_id or create_task_id("txt2img")
+
+        global_style_dict = next((d for d in styles_dict if d.get("id") == 1), None)
+        if txt2logoreq.style_id != 1:
+            style_dict = next((d for d in styles_dict if d.get("id") == txt2logoreq.style_id), None)
+            if style_dict:
+                txt2logoreq.prompt = style_dict['prompt'].format(prompt=txt2logoreq.prompt)
+        txt2logoreq.prompt += global_style_dict['prompt']
+
+        script_runner = scripts.scripts_txt2img
+
+        infotext_script_args = {}
+        self.apply_infotext(txt2logoreq, "txt2img", script_runner=script_runner,
+                            mentioned_script_args=infotext_script_args)
+
+        selectable_scripts, selectable_script_idx = self.get_selectable_script(txt2logoreq.script_name, script_runner)
+        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(txt2logoreq.sampler_name or txt2logoreq.sampler_index,
+                                                                   txt2logoreq.scheduler)
+
+        populate = txt2logoreq.copy(update={  # Override __init__ params
+            "sampler_name": validate_sampler_name(sampler),
+            "do_not_save_samples": not txt2logoreq.save_images,
+            "do_not_save_grid": not txt2logoreq.save_images,
+        })
+        if populate.sampler_name:
+            populate.sampler_index = None  # prevent a warning later on
+
+        if not populate.scheduler and scheduler != "Automatic":
+            populate.scheduler = scheduler
+
+        args = vars(populate)
+        args.pop('script_name', None)
+        args.pop('script_args', None)  # will refeed them to the pipeline directly after initializing them
+        args.pop('alwayson_scripts', None)
+        args.pop('infotext', None)
+
+        script_args = self.init_script_args(txt2logoreq, self.default_script_arg_txt2img, selectable_scripts,
+                                            selectable_script_idx, script_runner,
+                                            input_script_args=infotext_script_args)
+
+        send_images = args.pop('send_images', True)
+        args.pop('save_images', None)
+
+        add_task_to_queue(task_id)
+
+        with self.queue_lock:
+            with closing(StableDiffusionProcessingTxt2Logo(sd_model=shared.sd_model, **args)) as p:
+                p.is_api = True
+                p.scripts = script_runner
+                p.outpath_grids = opts.outdir_txt2img_grids
+                p.outpath_samples = opts.outdir_txt2img_samples
+
+                try:
+                    shared.state.begin(job="scripts_txt2img")
+                    start_task(task_id)
+                    curr_time = time.time()
+                    if selectable_scripts is not None:
+                        p.script_args = script_args
+                        processed = scripts.scripts_txt2img.run(p, *p.script_args)  # Need to pass args as list here
+                    else:
+                        p.script_args = tuple(script_args)  # Need to pass args as tuple here
+                        processed = process_images(p)
+                    process_extra_images(processed)
+                    finish_task(task_id)
+                finally:
+                    shared.state.end()
+                    shared.total_tqdm.clear()
+
+        b64images = list(map(encode_pil_to_base64, processed.images + processed.extra_images)) if send_images else []
+        end_time = time.time()
+        process_time = str(end_time - curr_time)
+
+        print(process_time)
+
+        # return models.TextToImageResponse(server_process_time=process_time, images=b64images)
+
+        return models.TextToLogoResponse(server_process_time=process_time, images=b64images)
 
     def text2imgapi(self, txt2imgreq: models.StableDiffusionTxt2ImgProcessingAPI):
         task_id = txt2imgreq.force_task_id or create_task_id("txt2img")
@@ -487,6 +570,7 @@ class Api:
                 try:
                     shared.state.begin(job="scripts_txt2img")
                     start_task(task_id)
+                    curr_time = time.time()
                     if selectable_scripts is not None:
                         p.script_args = script_args
                         processed = scripts.scripts_txt2img.run(p, *p.script_args) # Need to pass args as list here
@@ -500,8 +584,14 @@ class Api:
                     shared.total_tqdm.clear()
 
         b64images = list(map(encode_pil_to_base64, processed.images + processed.extra_images)) if send_images else []
+        end_time = time.time()
+        process_time = str(end_time - curr_time)
 
-        return models.TextToImageResponse(images=b64images, parameters=vars(txt2imgreq), info=processed.js())
+        print(process_time)
+
+        return models.TextToImageResponse(server_process_time=process_time, images=b64images)
+        #
+        # return models.TextToImageResponse(images=b64images, parameters=vars(txt2imgreq), info=processed.js())
 
     def img2imgapi(self, img2imgreq: models.StableDiffusionImg2ImgProcessingAPI):
         task_id = img2imgreq.force_task_id or create_task_id("img2img")
