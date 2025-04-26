@@ -41,7 +41,7 @@ from modules.progress import create_task_id, add_task_to_queue, start_task, fini
 
 
 
-def check_or_fetch_ai_logo_styles(api_endpoint: str = "https://photolab-ai.com/media/giff/ai/txt2img_styles/txt2img_styles.json") -> bool:
+def check_or_fetch_ai_logo_styles(api_endpoint: str = "https://logo-maker.online:8020/style/style_json") -> bool:
     file_path = Path("style") / "ai_logo_styles.json"
 
     if file_path.is_file():
@@ -110,7 +110,7 @@ def convert_base64_to_jpeg(base64_images: List[bytes]) -> List[str]:
                     output_path,
                     format='JPEG',
                     optimize=True,
-                    # exif=b"",
+                    exif=b"",
                     quality=90,
                     progressive=True
                 )
@@ -548,12 +548,12 @@ class Api:
 
         # base_prompt = ("You are a professional logo designer. You will create high quality award winning professional "
         #                "design made for both digital and print media that only contains few vector shapes.")
-        base_prompt=("Create a logo")
-        brand_name_prompt = (f"The company name is '{txt2logoreq.brand_name}', make sure to include the company name "
-                             "in the logo.")
+        base_prompt=("Create a logo, ")
+        brand_name_prompt = (f"brand name is '{txt2logoreq.brand_name}'++, (({txt2logoreq.brand_name})), make sure to include the brand name in the logo")
+                            
 
         txt2imgreq = models.StableDiffusionTxt2ImgProcessingAPI(
-            prompt=f"{base_prompt} {brand_name_prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} {txt2logoreq.prompt}",
+            prompt=f"{base_prompt} {brand_name_prompt} , {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} ",
             batch_size=txt2logoreq.batch_count,
             sampler_name="Euler",
             scheduler="Simple",
@@ -561,7 +561,7 @@ class Api:
             cfg_scale=1.0
         )
         task_id = txt2imgreq.force_task_id or create_task_id("txt2img")
-
+        print(txt2imgreq.prompt)
         script_runner = scripts.scripts_txt2img
        
 
