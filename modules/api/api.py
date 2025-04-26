@@ -548,20 +548,30 @@ class Api:
 
         # base_prompt = ("You are a professional logo designer. You will create high quality award winning professional "
         #                "design made for both digital and print media that only contains few vector shapes.")
+        
         base_prompt=("Create a logo, ")
-        brand_name_prompt = (f"brand name is '{txt2logoreq.brand_name}'++, (({txt2logoreq.brand_name})), make sure to include the brand name in the logo")
-                            
+        
+        if len(txt2logoreq.brand_name)==0:
+            brand_name_prompt=""
+            base_prompt="Create a Graphical logo, "
+        else :
+            brand_name_prompt = (f"brand name is '{txt2logoreq.brand_name}'++, (({txt2logoreq.brand_name})), make sure to include the brand name in the logo,")
+        
+        # model_prompt= ""                    
+        
+            
+
 
         txt2imgreq = models.StableDiffusionTxt2ImgProcessingAPI(
-            prompt=f"{base_prompt} {brand_name_prompt} , {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} ",
+            prompt=f"{base_prompt} {brand_name_prompt} {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} ",
             batch_size=txt2logoreq.batch_count,
             sampler_name="Euler",
             scheduler="Simple",
             steps=30,
             cfg_scale=1.0
         )
+        print(txt2imgreq.prompt)
         task_id = txt2imgreq.force_task_id or create_task_id("txt2img")
-        # print(txt2imgreq.prompt)
         script_runner = scripts.scripts_txt2img
        
 
