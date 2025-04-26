@@ -110,6 +110,7 @@ def convert_base64_to_jpeg(base64_images: List[bytes]) -> List[str]:
                     output_path,
                     format='JPEG',
                     optimize=True,
+                    # exif=b"",
                     quality=90,
                     progressive=True
                 )
@@ -545,8 +546,9 @@ class Api:
 
         check_or_fetch_ai_logo_styles()
 
-        base_prompt = ("You are a professional logo designer. You will create high quality award winning professional "
-                       "design made for both digital and print media that only contains few vector shapes.")
+        # base_prompt = ("You are a professional logo designer. You will create high quality award winning professional "
+        #                "design made for both digital and print media that only contains few vector shapes.")
+        base_prompt=("Create a logo")
         brand_name_prompt = (f"The company name is '{txt2logoreq.brand_name}', make sure to include the company name "
                              "in the logo.")
 
