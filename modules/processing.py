@@ -16,6 +16,7 @@ from skimage import exposure
 from typing import Any
 
 import modules.sd_hijack
+from backend.nn.unet import default
 from modules import devices, prompt_parser, masking, sd_samplers, lowvram, infotext_utils, extra_networks, sd_vae_approx, scripts, sd_samplers_common, sd_unet, errors, rng, profiling
 from modules.rng import slerp, get_noise_source_type  # noqa: F401
 from modules.sd_samplers_common import images_tensor_to_samples, decode_first_stage, approximation_indexes
@@ -28,6 +29,7 @@ import modules.images as images
 import modules.styles
 import modules.sd_models as sd_models
 import modules.sd_vae as sd_vae
+from pydantic import BaseModel, Field
 
 from einops import repeat, rearrange
 from blendmodes.blend import blendLayers, BlendType
@@ -1182,6 +1184,20 @@ def old_hires_fix_first_pass_dimensions(width, height):
     return width, height
 
 
+
+
+
+@dataclass
+class StableDiffusionProcessingTxt2Logo(BaseModel):
+    prompt: str = Field(default="")
+    brand_name: str = Field(default="")
+    batch_count: int = Field(1, ge=1, le=4)
+    style_id: int = Field(default=1, ge=1, le=16)
+
+
+
+
+
 @dataclass(repr=False)
 class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
     enable_hr: bool = False
@@ -1632,16 +1648,6 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         return res
 
-@dataclass
-class StableDiffusionProcessingTxt2Logo(StableDiffusionProcessingTxt2Img):
-    prompt: str = ""
-    brand_name: str = ""
-    batch_size: int = 1
-    style_id: int = 1
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.prompt = f"{self.prompt} for brand {self.brand_name} in style {self.style_id}".strip()
 
 @dataclass(repr=False)
 class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
