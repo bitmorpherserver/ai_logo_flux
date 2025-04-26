@@ -91,7 +91,7 @@ def get_prompt_by_style_id(style_id: int, style_json_file_path: str = "style/ai_
 def convert_base64_to_jpeg(base64_images: List[bytes]) -> List[str]:
 
     saved_paths = []
-    output_dir = "/tmp/.tmp/txt2logo"
+    output_dir = "/tmp/.temp/txt2logo"
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -110,11 +110,12 @@ def convert_base64_to_jpeg(base64_images: List[bytes]) -> List[str]:
                     output_path,
                     format='JPEG',
                     optimize=True,
-                    quality=85,
+                    quality=90,
                     progressive=True
                 )
-
-            saved_paths.append(output_path)
+            
+            output_file_url=f"/{os.environ.get('server_name')}/media/txt2logo/{file_id}.jpg"
+            saved_paths.append(output_file_url)
 
         except Exception as e:
             print(f"Failed to process image: {str(e)}")
@@ -557,10 +558,10 @@ class Api:
             steps=30,
             cfg_scale=1.0
         )
-
         task_id = txt2imgreq.force_task_id or create_task_id("txt2img")
 
         script_runner = scripts.scripts_txt2img
+       
 
         infotext_script_args = {}
         self.apply_infotext(txt2imgreq, "txt2img", script_runner=script_runner, mentioned_script_args=infotext_script_args)
@@ -604,6 +605,8 @@ class Api:
                 try:
                     shared.state.begin(job="scripts_txt2img")
                     start_task(task_id)
+                    current= time.time()
+
                     if selectable_scripts is not None:
                         p.script_args = script_args
                         processed = scripts.scripts_txt2img.run(p, *p.script_args) # Need to pass args as list here
@@ -621,10 +624,11 @@ class Api:
         b64images = list(map(encode_pil_to_base64, processed.images + processed.extra_images)) if send_images else []
         type(b64images)
         jpg_images = convert_base64_to_jpeg(b64images)
-
+        finished=time.time()
+        server_process_time= finished-current
         # return models.TextToImageResponse(images=b64images, parameters=vars(txt2logoreq), info=processed.js())
 
-        return models.TextToLogoResponse(success=success, message=message, url_images=b64images)
+        return models.TextToLogoResponse(success=success, message=message, server_process_time=server_process_time , output_image_url=jpg_images)
 
 
 

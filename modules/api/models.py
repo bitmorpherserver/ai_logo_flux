@@ -160,8 +160,9 @@ StableDiffusionImg2ImgProcessingAPI = PydanticModelGenerator(
 class TextToLogoResponse(BaseModel):
     # server_process_time: str = Field(default="")
     success: bool = Field(default=False)
-    message: str = Field(default="")
-    url_images: list[str] | None = Field(default=None, title="Image", description="The generated image in base64 format.")
+    message: str = Field(default="Returned output successfully")
+    server_process_time: float = Field( default= 0.0 )     
+    output_image_url: list[str] | None = Field(default=None, title="Image_Url", description="Image Url Location.")
 
 
 
