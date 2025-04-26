@@ -3,7 +3,8 @@ import inspect
 from pydantic import BaseModel, Field, create_model, ConfigDict
 from typing import Any, Optional, Literal
 from inflection import underscore
-from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessingImg2Img
+from pygments.lexer import default
+from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessingTxt2Logo, StableDiffusionProcessingImg2Img
 from modules.shared import sd_upscalers, opts, parser
 
 API_NOT_ALLOWED = [
@@ -95,6 +96,29 @@ class PydanticModelGenerator:
         DynamicModel = create_model(self._model_name, __config__=ConfigDict(populate_by_name=True, frozen=False), **fields)
         return DynamicModel
 
+
+
+
+
+# StableDiffusionTxt2LogoProcessingAPI = PydanticModelGenerator(
+#     "StableDiffusionProcessingTxt2Logo",
+#     StableDiffusionProcessingTxt2Logo,
+#     [
+#         {"key": "sampler_index", "type": str, "default": "Euler"},
+#         {"key": "script_name", "type": str | None, "default": None},
+#         {"key": "script_args", "type": list, "default": []},
+#         {"key": "send_images", "type": bool, "default": True},
+#         {"key": "save_images", "type": bool, "default": False},
+#         {"key": "alwayson_scripts", "type": dict, "default": {}},
+#         {"key": "force_task_id", "type": str | None, "default": None},
+#         {"key": "infotext", "type": str | None, "default": None},
+#     ]
+# ).generate_model()
+
+
+
+
+
 StableDiffusionTxt2ImgProcessingAPI = PydanticModelGenerator(
     "StableDiffusionProcessingTxt2Img",
     StableDiffusionProcessingTxt2Img,
@@ -129,15 +153,24 @@ StableDiffusionImg2ImgProcessingAPI = PydanticModelGenerator(
     ]
 ).generate_model()
 
+
+
+
+
 class TextToLogoResponse(BaseModel):
-    server_process_time: str
-    images: list[str] | None = Field(default=None, title="Image", description="The generated image in base64 format.")
+    # server_process_time: str = Field(default="")
+    success: bool = Field(default=False)
+    message: str = Field(default="")
+    url_images: list[str] | None = Field(default=None, title="Image", description="The generated image in base64 format.")
+
+
+
+
 
 class TextToImageResponse(BaseModel):
-    server_process_time: str
     images: list[str] | None = Field(default=None, title="Image", description="The generated image in base64 format.")
-#     parameters: dict
-#     info: str
+    parameters: dict
+    info: str
 
 class ImageToImageResponse(BaseModel):
     images: list[str] | None = Field(default=None, title="Image", description="The generated image in base64 format.")
@@ -339,3 +372,4 @@ class ExtensionItem(BaseModel):
     version: str = Field(title="Version", description="Extension Version")
     commit_date: int = Field(title="Commit Date", description="Extension Repository Commit Date")
     enabled: bool = Field(title="Enabled", description="Flag specifying whether this extension is enabled")
+
