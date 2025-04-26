@@ -561,7 +561,7 @@ class Api:
             cfg_scale=1.0
         )
         task_id = txt2imgreq.force_task_id or create_task_id("txt2img")
-        print(txt2imgreq.prompt)
+        # print(txt2imgreq.prompt)
         script_runner = scripts.scripts_txt2img
        
 
