@@ -9,6 +9,8 @@ import datetime
 import uvicorn
 import ipaddress
 import requests
+from datetime import date, datetime
+
 import gradio as gr
 from threading import Lock
 from concurrent.futures import ProcessPoolExecutor
@@ -94,12 +96,14 @@ def convert_base64_to_jpeg(base64_images: List[bytes]) -> List[str]:
     output_dir = "/tmp/.temp/txt2logo"
 
     os.makedirs(output_dir, exist_ok=True)
-
+    now = datetime.now()
+    date_string = now.strftime("%Y_%m_%d_%H_%M_%S")
     for b64_bytes in base64_images:
         try:
             file_id = uuid.uuid4().hex
+            file_id=date_string+ '_'+ str(file_id)
             output_path = os.path.join(output_dir, f"{file_id}.jpg")
-
+            
             img_bytes = base64.b64decode(b64_bytes)
 
             with Image.open(io.BytesIO(img_bytes)) as img:
