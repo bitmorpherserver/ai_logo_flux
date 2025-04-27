@@ -553,7 +553,7 @@ class Api:
         # base_prompt = ("You are a professional logo designer. You will create high quality award winning professional "
         #                "design made for both digital and print media that only contains few vector shapes.")
         
-        base_prompt=("Create a text-based logo, typographic logo, ")
+        base_prompt=("Create a text-based logo, text logo")
         
         if len(txt2logoreq.brand_name)==0:
             brand_name_prompt=""
