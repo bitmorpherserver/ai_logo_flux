@@ -553,13 +553,13 @@ class Api:
         # base_prompt = ("You are a professional logo designer. You will create high quality award winning professional "
         #                "design made for both digital and print media that only contains few vector shapes.")
         
-        base_prompt=("Create a logo, ")
+        base_prompt=("Create a text-based logo, typographic logo, ")
         
         if len(txt2logoreq.brand_name)==0:
             brand_name_prompt=""
             base_prompt="Create a Graphical logo, "
         else :
-            brand_name_prompt = (f"brand name is '{txt2logoreq.brand_name}'++, (({txt2logoreq.brand_name})), make sure to include the brand name in the logo,")
+            brand_name_prompt = (f"brand name is '{txt2logoreq.brand_name}', (({txt2logoreq.brand_name})),  spelling out the words '{txt2logoreq.brand_name}' ")
         
         # model_prompt= ""                    
         
@@ -574,7 +574,7 @@ class Api:
             steps=30,
             cfg_scale=1.0
         )
-        # print(txt2imgreq.prompt)
+        print(txt2imgreq.prompt)
         task_id = txt2imgreq.force_task_id or create_task_id("txt2img")
         script_runner = scripts.scripts_txt2img
        
@@ -1085,4 +1085,5 @@ class Api:
     def stop_webui(request):
         shared.state.server_command = "stop"
         return Response("Stopping.")
+
 
