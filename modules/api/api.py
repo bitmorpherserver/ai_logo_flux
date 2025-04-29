@@ -9,8 +9,7 @@ import datetime
 import uvicorn
 import ipaddress
 import requests
-from datetime import date, datetime
-
+from datetime import date, datetime 
 import gradio as gr
 from threading import Lock
 from concurrent.futures import ProcessPoolExecutor
@@ -41,6 +40,51 @@ from modules.progress import create_task_id, add_task_to_queue, start_task, fini
 
 
 
+style_dict_list= []
+log_entry=""
+
+
+
+def set_style_dict_list(date_and_timestamp,user_prompt,brand_name,style_id):
+    global log_entry
+    global style_dict_list
+    
+
+    try:
+      if len(style_dict_list)==0:
+
+        with open('style/ai_logo_styles.json') as json_file:
+            style_dict_list = json.load(json_file)
+            for datum in style_dict_list:
+                if datum['id']==style_id:
+                    style_name=datum['name']
+        
+      else:
+            for datum in style_dict_list:
+                if datum['id']==style_id:
+                    style_name=datum['name']
+            # print(type(style_dict_list[0]))
+    finally:
+        log_entry = f" Date and Time: {date_and_timestamp}; Prompt: {user_prompt} '{brand_name}'; Style ID: {style_id}; Style Name {style_name}\n"
+
+    return log_entry
+
+
+
+def save_prompt_log(log):
+    global log_entry
+    with open("/var/log/prompts.log", "a") as file:
+        file.write(log)
+        return True
+
+def get_the_image_name_and_save(b64image):
+    global log_entry
+    for img in b64image:
+        imgstr=str(img)
+        image_name=imgstr.split("/")[-1]
+        log=image_name+str(log_entry)
+        save_prompt_log(log)
+
 
 
 def check_or_fetch_ai_logo_styles(api_endpoint: str = "https://logo-maker.online:8020/style/style_json") -> bool:
@@ -54,6 +98,7 @@ def check_or_fetch_ai_logo_styles(api_endpoint: str = "https://logo-maker.online
     try:
         response = requests.get(api_endpoint, timeout=10)
         response.raise_for_status()
+        
 
         with file_path.open('w') as f:
             f.write(response.text)
@@ -549,6 +594,9 @@ class Api:
     def text2logoapi(self, txt2logoreq: models.StableDiffusionProcessingTxt2Logo):
 
         check_or_fetch_ai_logo_styles()
+        global style_dict_list
+        global log_entry
+        
 
         # base_prompt = ("You are a professional logo designer. You will create high quality award winning professional "
         #                "design made for both digital and print media that only contains few vector shapes.")
@@ -563,7 +611,7 @@ class Api:
         
         # model_prompt= ""                    
         
-            
+
 
 
         txt2imgreq = models.StableDiffusionTxt2ImgProcessingAPI(
@@ -639,7 +687,12 @@ class Api:
 
         b64images = list(map(encode_pil_to_base64, processed.images + processed.extra_images)) if send_images else []
         type(b64images)
+
+        date_and_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         jpg_images = convert_base64_to_jpeg(b64images)
+        log_entry= set_style_dict_list(date_and_timestamp,txt2logoreq.prompt,txt2logoreq.brand_name,txt2logoreq.style_id)
+        get_the_image_name_and_save(jpg_images)
         finished=time.time()
         server_process_time= finished-current
         # return models.TextToImageResponse(images=b64images, parameters=vars(txt2logoreq), info=processed.js())
