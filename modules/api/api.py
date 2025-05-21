@@ -20,12 +20,13 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from secrets import compare_digest
-
+from modules.magic_prompt.magic_prompt import main as magic_prompt_main
+from modules.magic_prompt.edit_template import main as edit_template_main
 import modules.shared as shared
 from modules import sd_samplers, deepbooru, images, scripts, ui, postprocessing, errors, restart, shared_items, script_callbacks, infotext_utils, sd_models, sd_schedulers
 from modules.api import models
 from modules.shared import opts
-from modules.processing import StableDiffusionProcessingTxt2Logo, StableDiffusionProcessingTxt2Img, StableDiffusionProcessingImg2Img, process_images, process_extra_images
+from modules.processing import StableDiffusionProcessingTxt2Logo,StableDiffusionProcessingTemplate2Logo, StableDiffusionProcessingTxt2Img, StableDiffusionProcessingImg2Img, process_images, process_extra_images
 import modules.textual_inversion.textual_inversion
 from modules.shared import cmd_opts
 
@@ -65,7 +66,7 @@ def set_style_dict_list(date_and_timestamp,user_prompt,brand_name,style_id):
                     style_name=datum['name']
             # print(type(style_dict_list[0]))
     finally:
-        log_entry = f" Date and Time: {date_and_timestamp}; Prompt: {user_prompt} '{brand_name}'; Style ID: {style_id}; Style Name {style_name}\n"
+        log_entry = f""" Date and Time: {date_and_timestamp}; Prompt: {user_prompt} '{brand_name}'; Style ID: {style_id}; Style Name {style_name}\n"""
 
     return log_entry
 
@@ -108,9 +109,39 @@ def check_or_fetch_ai_logo_styles(api_endpoint: str = "https://logo-maker.online
         print(f"Error: {e}")
         return False
 
+def check_or_fetch_ai_template_styles(api_endpoint: str = "https://logo-maker.online:8030/api/ai-logo-template/v1/template-json") -> bool:
+    file_path = Path("style") / "ai_logo_templates_v1.json"
+
+    if file_path.is_file():
+        return True
+
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        response = requests.get(api_endpoint, timeout=10)
+        response.raise_for_status()
+        
+
+        with file_path.open('w') as f:
+            f.write(response.text)
+
+        return True
+    except (requests.RequestException, IOError) as e:
+        print(f"Error: {e}")
+        return False
+
+
+
+
 
 _STYLE_CACHE = {}
+_STYLE_CATEGORY_CACHE = {}
 # Retrieve prompt from ai_logo_styles.json
+
+
+
+
+
 def get_prompt_by_style_id(style_id: int, style_json_file_path: str = "style/ai_logo_styles.json") -> str:
     if style_json_file_path not in _STYLE_CACHE:
         try:
@@ -133,6 +164,83 @@ def get_prompt_by_style_id(style_id: int, style_json_file_path: str = "style/ai_
             f"No prompt found for ID: {style_id} in {style_json_file_path}. "
             f"Available IDs: {list(id_prompt_map.keys())}"
         )
+
+
+
+_STYLE_CATEGORY_CACHE={}
+import json
+
+def get_prompt_by_item_id_category_id(category_id:int , item_id: int, style_json_file_path: str = "style/ai_logo_templates_v1.json") -> str:
+    if style_json_file_path not in _STYLE_CATEGORY_CACHE:
+        try:
+            with open(style_json_file_path, 'r') as file:
+                data = json.load(file)
+                cached_entry = {}
+                for category in data:
+                    cat_id = category['cat_id']
+                    items= category['items']
+                    if cat_id not in cached_entry:
+                        cached_entry[cat_id]={}
+                    # print(items)
+                    for item in items:
+                        cached_entry[cat_id][item['item_id']] = item['prompt']
+                # print(cached_entry)
+                _STYLE_CATEGORY_CACHE[style_json_file_path]=cached_entry
+                # _STYLE_CATEGORY_CACHE[style_json_file_path] = {
+                #     item['id']: item['prompt'] for item in data
+                # }
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Style file not found at: {style_json_file_path}")
+        except json.JSONDecodeError:
+            raise ValueError(f"Invalid JSON format in: {style_json_file_path}")
+
+    id_prompt_map = _STYLE_CATEGORY_CACHE[style_json_file_path]
+
+    try:
+        return id_prompt_map[category_id][item_id]
+    except KeyError:
+        raise ValueError(
+            f"No prompt found for category ID {category_id} and style ID {item_id} in {style_json_file_path}. "
+            f"Available categories: {list(id_prompt_map.keys())}"
+        )
+
+# sss = get_prompt_by_item_id_category_id(2,2)
+# print(sss)
+
+# def get_prompt_by_item_id_category_id(style_id: int, style_json_file_path: str = "style/ai_template_styles.json") -> str:
+#     if style_json_file_path not in _STYLE_CATEGORY_CACHE:
+#         try:
+#             with open(style_json_file_path, 'r') as file:
+#                 data = json.load(file)
+#                 cached_entry = {}
+#                 for category in data:
+#                     cat_id = category['cat_id']
+#                     items= category['items']
+#                     for item in items:
+#                         cached_entry[cat_id][item['item_id']] = item['prompt']
+#                 # _STYLE_CATEGORY_CACHE[style_json_file_path] = {
+#                 #     item['id']: item['prompt'] for item in data
+#                 # }
+#         except FileNotFoundError:
+#             raise FileNotFoundError(f"Style file not found at: {style_json_file_path}")
+#         except json.JSONDecodeError:
+#             raise ValueError(f"Invalid JSON format in: {style_json_file_path}")
+
+#     id_prompt_map = _STYLE_CACHE[style_json_file_path]
+
+#     try:
+#         return id_prompt_map[style_id]
+#     except KeyError:
+#         raise ValueError(
+#             f"No prompt found for ID: {style_id} in {style_json_file_path}. "
+#             f"Available IDs: {list(id_prompt_map.keys())}"
+#         )
+
+
+
+
+
+
 
 
 def convert_base64_to_jpeg(base64_images: List[bytes]) -> List[str]:
@@ -353,6 +461,8 @@ class Api:
         self.queue_lock = queue_lock
         #api_middleware(self.app)  # FIXME: (legacy) this will have to be fixed
         self.add_api_route("/sdapi/v1/txt2logo", self.text2logoapi, methods=["POST"], response_model=models.TextToLogoResponse)
+        self.add_api_route("/sdapi/v1/temp2logo", self.temp2logoapi, methods=["POST"], response_model=models.TextToLogoResponse)
+
         self.add_api_route("/sdapi/v1/txt2img", self.text2imgapi, methods=["POST"], response_model=models.TextToImageResponse)
         self.add_api_route("/sdapi/v1/img2img", self.img2imgapi, methods=["POST"], response_model=models.ImageToImageResponse)
         self.add_api_route("/sdapi/v1/extra-single-image", self.extras_single_image_api, methods=["POST"], response_model=models.ExtrasSingleImageResponse)
@@ -594,6 +704,7 @@ class Api:
     def text2logoapi(self, txt2logoreq: models.StableDiffusionProcessingTxt2Logo):
 
         check_or_fetch_ai_logo_styles()
+        # check_or_fetch_ai_template_styles()
         global style_dict_list
         global log_entry
         
@@ -601,21 +712,28 @@ class Api:
         # base_prompt = ("You are a professional logo designer. You will create high quality award winning professional "
         #                "design made for both digital and print media that only contains few vector shapes.")
         
-        base_prompt=("Create a text-based logo, text logo")
+        base_prompt=("""Create logo """)
         
         if len(txt2logoreq.brand_name)==0:
             brand_name_prompt=""
-            base_prompt="Create a Graphical logo, "
+            base_prompt="""Create logo """
         else :
-            brand_name_prompt = (f"brand name is '{txt2logoreq.brand_name}', (({txt2logoreq.brand_name})),  spelling out the words '{txt2logoreq.brand_name}' ")
+            brand_name_prompt = (f"""brand name is '{txt2logoreq.brand_name}', (({txt2logoreq.brand_name})),  spelling out the words '{txt2logoreq.brand_name}' """)
         
         # model_prompt= ""                    
         
+        string_word_count= txt2logoreq.prompt.split()
 
 
+        if len(string_word_count)<=5:
+            user_prompt= f"""{base_prompt} ,{brand_name_prompt} ,{txt2logoreq.prompt} ,{get_prompt_by_style_id(txt2logoreq.style_id)}"""
+            enhanced_prompt=magic_prompt_main(user_prompt)
+        else :
+            enhanced_prompt=f"""{base_prompt} {brand_name_prompt} {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} """
 
         txt2imgreq = models.StableDiffusionTxt2ImgProcessingAPI(
-            prompt=f"{base_prompt} {brand_name_prompt} {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} ",
+            # prompt=f"""{base_prompt} {brand_name_prompt} {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} """,
+            prompt=enhanced_prompt,
             batch_size=txt2logoreq.batch_count,
             sampler_name="Euler",
             scheduler="Simple",
@@ -699,6 +817,108 @@ class Api:
 
         return models.TextToLogoResponse(success=success, message=message, server_process_time=server_process_time , output_image_url=jpg_images)
 
+
+
+    def temp2logoapi(self, temp2logoreq: models.StableDiffusionProcessingTemplate2Logo):
+
+
+        check_or_fetch_ai_template_styles()
+        global style_dict_list
+        global log_entry
+        base_prompt = get_prompt_by_item_id_category_id(temp2logoreq.category_id, temp2logoreq.item_id)
+
+        
+        user_prompt=f"""Base Prompt: {base_prompt}
+        user changed instruction :  Brand Name replace with {temp2logoreq.brand_name}, Others changes {temp2logoreq.prompt}  
+        """
+        edited_prompt=edit_template_main(user_prompt)
+        
+        txt2imgreq = models.StableDiffusionTxt2ImgProcessingAPI(
+            # prompt=f"""{base_prompt} {brand_name_prompt} {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} """,
+            prompt=edited_prompt,
+            batch_size=temp2logoreq.batch_count,
+            sampler_name="Euler",
+            scheduler="Simple",
+            steps=30,
+            cfg_scale=1.0
+        )
+        print(txt2imgreq.prompt)
+        task_id = txt2imgreq.force_task_id or create_task_id("txt2img")
+        script_runner = scripts.scripts_txt2img
+       
+
+        infotext_script_args = {}
+        self.apply_infotext(txt2imgreq, "txt2img", script_runner=script_runner, mentioned_script_args=infotext_script_args)
+
+        selectable_scripts, selectable_script_idx = self.get_selectable_script(txt2imgreq.script_name, script_runner)
+        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(txt2imgreq.sampler_name or txt2imgreq.sampler_index, txt2imgreq.scheduler)
+
+        populate = txt2imgreq.copy(update={  # Override __init__ params
+            "sampler_name": validate_sampler_name(sampler),
+            "do_not_save_samples": not txt2imgreq.save_images,
+            "do_not_save_grid": not txt2imgreq.save_images,
+        })
+        if populate.sampler_name:
+            populate.sampler_index = None  # prevent a warning later on
+
+        if not populate.scheduler and scheduler != "Automatic":
+            populate.scheduler = scheduler
+
+        args = vars(populate)
+        args.pop('script_name', None)
+        args.pop('script_args', None) # will refeed them to the pipeline directly after initializing them
+        args.pop('alwayson_scripts', None)
+        args.pop('infotext', None)
+
+        script_args = self.init_script_args(txt2imgreq, self.default_script_arg_txt2img, selectable_scripts, selectable_script_idx, script_runner, input_script_args=infotext_script_args)
+
+        send_images = args.pop('send_images', True)
+        args.pop('save_images', None)
+
+        add_task_to_queue(task_id)
+
+        success = False
+        message = "Error"
+        with self.queue_lock:
+            with closing(StableDiffusionProcessingTxt2Img(sd_model=shared.sd_model, **args)) as p:
+                p.is_api = True
+                p.scripts = script_runner
+                p.outpath_grids = opts.outdir_txt2img_grids
+                p.outpath_samples = opts.outdir_txt2img_samples
+
+                try:
+                    shared.state.begin(job="scripts_txt2img")
+                    start_task(task_id)
+                    current= time.time()
+
+                    if selectable_scripts is not None:
+                        p.script_args = script_args
+                        processed = scripts.scripts_txt2img.run(p, *p.script_args) # Need to pass args as list here
+                    else:
+                        p.script_args = tuple(script_args) # Need to pass args as tuple here
+                        processed = process_images(p)
+                    process_extra_images(processed)
+                    finish_task(task_id)
+                    success = True
+                    message = "Returned output successfully"
+                finally:
+                    shared.state.end()
+                    shared.total_tqdm.clear()
+
+        b64images = list(map(encode_pil_to_base64, processed.images + processed.extra_images)) if send_images else []
+        type(b64images)
+
+        date_and_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        jpg_images = convert_base64_to_jpeg(b64images)
+        # log_entry= set_style_dict_list(date_and_timestamp,txt2logoreq.prompt,txt2logoreq.brand_name,txt2logoreq.style_id)
+        # get_the_image_name_and_save(jpg_images)
+        finished=time.time()
+        server_process_time= finished-current
+        # return models.TextToImageResponse(images=b64images, parameters=vars(txt2logoreq), info=processed.js())
+
+        return models.TextToLogoResponse(success=success, message=message, server_process_time=server_process_time , output_image_url=jpg_images)
+        # return "hello"
 
 
 

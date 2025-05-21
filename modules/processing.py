@@ -1195,6 +1195,16 @@ class StableDiffusionProcessingTxt2Logo(BaseModel):
     style_id: int = Field(default=1, ge=1, le=16)
 
 
+@dataclass
+class StableDiffusionProcessingTemplate2Logo(BaseModel):
+    prompt: str = Field(default="")
+    brand_name: str = Field(default="")
+    batch_count: int = Field(1, ge=1, le=4)
+    item_id: int = Field(default=1, ge=1, le=100)
+    category_id: int= Field(default=1, ge=1, le=100)
+
+
+
 
 
 

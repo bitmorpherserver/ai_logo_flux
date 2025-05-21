@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, create_model, ConfigDict
 from typing import Any, Optional, Literal
 from inflection import underscore
 from pygments.lexer import default
-from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessingTxt2Logo, StableDiffusionProcessingImg2Img
+from modules.processing import StableDiffusionProcessingTxt2Img, StableDiffusionProcessingTxt2Logo, StableDiffusionProcessingImg2Img, StableDiffusionProcessingTemplate2Logo
 from modules.shared import sd_upscalers, opts, parser
 
 API_NOT_ALLOWED = [
