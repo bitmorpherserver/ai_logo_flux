@@ -9,7 +9,7 @@ import datetime
 import uvicorn
 import ipaddress
 import requests
-from datetime import date, datetime 
+from datetime import date, datetime
 import gradio as gr
 from threading import Lock
 from concurrent.futures import ProcessPoolExecutor
@@ -23,10 +23,12 @@ from secrets import compare_digest
 from modules.magic_prompt.magic_prompt import main as magic_prompt_main
 from modules.magic_prompt.edit_template import main as edit_template_main
 import modules.shared as shared
-from modules import sd_samplers, deepbooru, images, scripts, ui, postprocessing, errors, restart, shared_items, script_callbacks, infotext_utils, sd_models, sd_schedulers
+from modules import sd_samplers, deepbooru, images, scripts, ui, postprocessing, errors, restart, shared_items, \
+    script_callbacks, infotext_utils, sd_models, sd_schedulers
 from modules.api import models
 from modules.shared import opts
-from modules.processing import StableDiffusionProcessingTxt2Logo,StableDiffusionProcessingTemplate2Logo, StableDiffusionProcessingTxt2Img, StableDiffusionProcessingImg2Img, process_images, process_extra_images
+from modules.processing import StableDiffusionProcessingTxt2Logo, StableDiffusionProcessingTemplate2Logo, \
+    StableDiffusionProcessingTxt2Img, StableDiffusionProcessingImg2Img, process_images, process_extra_images
 import modules.textual_inversion.textual_inversion
 from modules.shared import cmd_opts
 
@@ -39,53 +41,104 @@ import piexif.helper
 from contextlib import closing
 from modules.progress import create_task_id, add_task_to_queue, start_task, finish_task, current_task
 
+style_dict_list = []
+log_entry = ""
 
 
-style_dict_list= []
-log_entry=""
+# def set_style_dict_list(date_and_timestamp,user_prompt,brand_name,style_id):
+#     global log_entry
+#     global style_dict_list
 
 
+#     try:
+#       if len(style_dict_list)==0:
 
-def set_style_dict_list(date_and_timestamp,user_prompt,brand_name,style_id):
+#         with open('style/ai_logo_styles.json') as json_file:
+#             style_dict_list = json.load(json_file)
+#             for datum in style_dict_list:
+#                 if datum['id']==style_id:
+#                     style_name=datum['name']
+
+#       else:
+#             for datum in style_dict_list:
+#                 if datum['id']==style_id:
+#                     style_name=datum['name']
+#             # print(type(style_dict_list[0]))
+#     finally:
+#         log_entry = f""" Date and Time: {date_and_timestamp}; Prompt: {user_prompt} '{brand_name}'; Style ID: {style_id}; Style Name {style_name}\n"""
+
+#     return log_entry
+
+
+# def save_prompt_log(log):
+#     global log_entry
+#     with open("/var/log/prompts.log", "a") as file:
+#         file.write(log)
+#         return True
+
+# def get_the_image_name_and_save(b64image):
+#     global log_entry
+#     for img in b64image:
+#         imgstr=str(img)
+#         image_name=imgstr.split("/")[-1]
+#         log=image_name+str(log_entry)
+#         save_prompt_log(log)
+
+
+def set_style_dict_list(date_and_timestamp, user_prompt, brand_name, style_id, enhanced_prompt):
     global log_entry
     global style_dict_list
-    
 
     try:
-      if len(style_dict_list)==0:
+        if len(style_dict_list) == 0:
 
-        with open('style/ai_logo_styles.json') as json_file:
-            style_dict_list = json.load(json_file)
+            with open('style/ai_logo_styles.json') as json_file:
+                style_dict_list = json.load(json_file)
+                for datum in style_dict_list:
+                    if datum['id'] == style_id:
+                        style_name = datum['name']
+
+        else:
             for datum in style_dict_list:
-                if datum['id']==style_id:
-                    style_name=datum['name']
-        
-      else:
-            for datum in style_dict_list:
-                if datum['id']==style_id:
-                    style_name=datum['name']
+                if datum['id'] == style_id:
+                    style_name = datum['name']
             # print(type(style_dict_list[0]))
     finally:
-        log_entry = f""" Date and Time: {date_and_timestamp}; Prompt: {user_prompt} '{brand_name}'; Style ID: {style_id}; Style Name {style_name}\n"""
+        log_entry = f""" Date and Time: {date_and_timestamp}; Prompt: {user_prompt}; Brand Name: {brand_name}; Style ID: {style_id}; Style Name {style_name}\nEnhanced Prompt: {enhanced_prompt}\n"""
 
     return log_entry
 
 
-
-def save_prompt_log(log):
+def save_prompt_log(log, destination):
     global log_entry
-    with open("/var/log/prompts.log", "a") as file:
+    location = f"/var/log/{destination}"
+    with open(location, "a") as file:
         file.write(log)
         return True
+
+
+# def get_full_log(*args):
+# bla bla bla
+
+# get_the_image_name_and_save(jpg_images, date_and_timestamp, txt2imgreq.category_id, txt2imgreq.item_id ,user_prompt, edited_prompt)
+
+def get_image_category_enhanced_save(b64image, date_and_timestamp, category_id, item_id, user_prompt, edited_prompt):
+    log = f"""Date: {date_and_timestamp}; Category: {category_id}; Item: {item_id}; {user_prompt}; Edited Propmt: {edited_prompt}"""
+    for img in b64image:
+        imgstr = str(img)
+        image_name = imgstr.split("/")[-1]
+        log = f"""{image_name}; {log}"""
+        log = log + '\n'
+        save_prompt_log(log, "template.log")
+
 
 def get_the_image_name_and_save(b64image):
     global log_entry
     for img in b64image:
-        imgstr=str(img)
-        image_name=imgstr.split("/")[-1]
-        log=image_name+str(log_entry)
-        save_prompt_log(log)
-
+        imgstr = str(img)
+        image_name = imgstr.split("/")[-1]
+        log = image_name + str(log_entry)
+        save_prompt_log(log, "prompts.log")
 
 
 def check_or_fetch_ai_logo_styles(api_endpoint: str = "https://logo-maker.online:8020/style/style_json") -> bool:
@@ -99,7 +152,6 @@ def check_or_fetch_ai_logo_styles(api_endpoint: str = "https://logo-maker.online
     try:
         response = requests.get(api_endpoint, timeout=10)
         response.raise_for_status()
-        
 
         with file_path.open('w') as f:
             f.write(response.text)
@@ -109,7 +161,9 @@ def check_or_fetch_ai_logo_styles(api_endpoint: str = "https://logo-maker.online
         print(f"Error: {e}")
         return False
 
-def check_or_fetch_ai_template_styles(api_endpoint: str = "https://logo-maker.online:8030/api/ai-logo-template/v1/template-json") -> bool:
+
+def check_or_fetch_ai_template_styles(
+        api_endpoint: str = "https://logo-maker.online:8030/api/ai-logo-template/v1/template-json") -> bool:
     file_path = Path("style") / "ai_logo_templates_v1.json"
 
     if file_path.is_file():
@@ -120,7 +174,6 @@ def check_or_fetch_ai_template_styles(api_endpoint: str = "https://logo-maker.on
     try:
         response = requests.get(api_endpoint, timeout=10)
         response.raise_for_status()
-        
 
         with file_path.open('w') as f:
             f.write(response.text)
@@ -131,15 +184,11 @@ def check_or_fetch_ai_template_styles(api_endpoint: str = "https://logo-maker.on
         return False
 
 
-
-
-
 _STYLE_CACHE = {}
 _STYLE_CATEGORY_CACHE = {}
+
+
 # Retrieve prompt from ai_logo_styles.json
-
-
-
 
 
 def get_prompt_by_style_id(style_id: int, style_json_file_path: str = "style/ai_logo_styles.json") -> str:
@@ -166,11 +215,12 @@ def get_prompt_by_style_id(style_id: int, style_json_file_path: str = "style/ai_
         )
 
 
-
-_STYLE_CATEGORY_CACHE={}
+_STYLE_CATEGORY_CACHE = {}
 import json
 
-def get_prompt_by_item_id_category_id(category_id:int , item_id: int, style_json_file_path: str = "style/ai_logo_templates_v1.json") -> str:
+
+def get_prompt_by_item_id_category_id(category_id: int, item_id: int,
+                                      style_json_file_path: str = "style/ai_logo_templates_v1.json") -> str:
     if style_json_file_path not in _STYLE_CATEGORY_CACHE:
         try:
             with open(style_json_file_path, 'r') as file:
@@ -178,14 +228,14 @@ def get_prompt_by_item_id_category_id(category_id:int , item_id: int, style_json
                 cached_entry = {}
                 for category in data:
                     cat_id = category['cat_id']
-                    items= category['items']
+                    items = category['items']
                     if cat_id not in cached_entry:
-                        cached_entry[cat_id]={}
+                        cached_entry[cat_id] = {}
                     # print(items)
                     for item in items:
                         cached_entry[cat_id][item['item_id']] = item['prompt']
                 # print(cached_entry)
-                _STYLE_CATEGORY_CACHE[style_json_file_path]=cached_entry
+                _STYLE_CATEGORY_CACHE[style_json_file_path] = cached_entry
                 # _STYLE_CATEGORY_CACHE[style_json_file_path] = {
                 #     item['id']: item['prompt'] for item in data
                 # }
@@ -203,6 +253,7 @@ def get_prompt_by_item_id_category_id(category_id:int , item_id: int, style_json
             f"No prompt found for category ID {category_id} and style ID {item_id} in {style_json_file_path}. "
             f"Available categories: {list(id_prompt_map.keys())}"
         )
+
 
 # sss = get_prompt_by_item_id_category_id(2,2)
 # print(sss)
@@ -237,14 +288,7 @@ def get_prompt_by_item_id_category_id(category_id:int , item_id: int, style_json
 #         )
 
 
-
-
-
-
-
-
 def convert_base64_to_jpeg(base64_images: List[bytes]) -> List[str]:
-
     saved_paths = []
     output_dir = "/tmp/.temp/txt2logo"
 
@@ -254,9 +298,9 @@ def convert_base64_to_jpeg(base64_images: List[bytes]) -> List[str]:
     for b64_bytes in base64_images:
         try:
             file_id = uuid.uuid4().hex
-            file_id=date_string+ '_'+ str(file_id)
+            file_id = date_string + '_' + str(file_id)
             output_path = os.path.join(output_dir, f"{file_id}.jpg")
-            
+
             img_bytes = base64.b64decode(b64_bytes)
 
             with Image.open(io.BytesIO(img_bytes)) as img:
@@ -271,8 +315,8 @@ def convert_base64_to_jpeg(base64_images: List[bytes]) -> List[str]:
                     quality=90,
                     progressive=True
                 )
-            
-            output_file_url=f"/{os.environ.get('server_name')}/media/txt2logo/{file_id}.jpg"
+
+            output_file_url = f"/{os.environ.get('server_name')}/media/txt2logo/{file_id}.jpg"
             saved_paths.append(output_file_url)
 
         except Exception as e:
@@ -280,9 +324,6 @@ def convert_base64_to_jpeg(base64_images: List[bytes]) -> List[str]:
             continue
 
     return saved_paths
-
-
-
 
 
 def script_name_to_index(name, scripts):
@@ -362,19 +403,22 @@ def encode_pil_to_base64(image):
                 if isinstance(key, str) and isinstance(value, str):
                     metadata.add_text(key, value)
                     use_metadata = True
-            image.save(output_bytes, format="PNG", pnginfo=(metadata if use_metadata else None), quality=opts.jpeg_quality)
+            image.save(output_bytes, format="PNG", pnginfo=(metadata if use_metadata else None),
+                       quality=opts.jpeg_quality)
 
         elif opts.samples_format.lower() in ("jpg", "jpeg", "webp"):
             if image.mode in ("RGBA", "P"):
                 image = image.convert("RGB")
             parameters = image.info.get('parameters', None)
             exif_bytes = piexif.dump({
-                "Exif": { piexif.ExifIFD.UserComment: piexif.helper.UserComment.dump(parameters or "", encoding="unicode") }
+                "Exif": {
+                    piexif.ExifIFD.UserComment: piexif.helper.UserComment.dump(parameters or "", encoding="unicode")}
             })
             if opts.samples_format.lower() in ("jpg", "jpeg"):
-                image.save(output_bytes, format="JPEG", exif = exif_bytes, quality=opts.jpeg_quality)
+                image.save(output_bytes, format="JPEG", exif=exif_bytes, quality=opts.jpeg_quality)
             else:
-                image.save(output_bytes, format="WEBP", exif = exif_bytes, quality=opts.jpeg_quality, lossless=opts.webp_lossless)
+                image.save(output_bytes, format="WEBP", exif=exif_bytes, quality=opts.jpeg_quality,
+                           lossless=opts.webp_lossless)
 
         else:
             raise HTTPException(status_code=500, detail="Invalid image format")
@@ -427,7 +471,8 @@ def api_middleware(app: FastAPI):
             message = f"API error: {request.method}: {request.url} {err}"
             if rich_available:
                 print(message)
-                console.print_exception(show_locals=True, max_frames=2, extra_lines=1, suppress=[anyio, starlette], word_wrap=False, width=min([console.width, 200]))
+                console.print_exception(show_locals=True, max_frames=2, extra_lines=1, suppress=[anyio, starlette],
+                                        word_wrap=False, width=min([console.width, 200]))
             else:
                 errors.report(message, exc_info=True)
         return JSONResponse(status_code=vars(e).get('status_code', 500), content=jsonable_encoder(err))
@@ -459,44 +504,68 @@ class Api:
         self.router = APIRouter()
         self.app = app
         self.queue_lock = queue_lock
-        #api_middleware(self.app)  # FIXME: (legacy) this will have to be fixed
-        self.add_api_route("/sdapi/v1/txt2logo", self.text2logoapi, methods=["POST"], response_model=models.TextToLogoResponse)
-        self.add_api_route("/sdapi/v1/temp2logo", self.temp2logoapi, methods=["POST"], response_model=models.TextToLogoResponse)
+        # api_middleware(self.app)  # FIXME: (legacy) this will have to be fixed
+        self.add_api_route("/sdapi/v1/txt2logo", self.text2logoapi, methods=["POST"],
+                           response_model=models.TextToLogoResponse)
+        self.add_api_route("/sdapi/v1/temp2logo", self.temp2logoapi, methods=["POST"],
+                           response_model=models.TextToLogoResponse)
 
-        self.add_api_route("/sdapi/v1/txt2img", self.text2imgapi, methods=["POST"], response_model=models.TextToImageResponse)
-        self.add_api_route("/sdapi/v1/img2img", self.img2imgapi, methods=["POST"], response_model=models.ImageToImageResponse)
-        self.add_api_route("/sdapi/v1/extra-single-image", self.extras_single_image_api, methods=["POST"], response_model=models.ExtrasSingleImageResponse)
-        self.add_api_route("/sdapi/v1/extra-batch-images", self.extras_batch_images_api, methods=["POST"], response_model=models.ExtrasBatchImagesResponse)
-        self.add_api_route("/sdapi/v1/png-info", self.pnginfoapi, methods=["POST"], response_model=models.PNGInfoResponse)
-        self.add_api_route("/sdapi/v1/progress", self.progressapi, methods=["GET"], response_model=models.ProgressResponse)
+        self.add_api_route("/sdapi/v1/txt2img", self.text2imgapi, methods=["POST"],
+                           response_model=models.TextToImageResponse)
+        self.add_api_route("/sdapi/v1/img2img", self.img2imgapi, methods=["POST"],
+                           response_model=models.ImageToImageResponse)
+        self.add_api_route("/sdapi/v1/extra-single-image", self.extras_single_image_api, methods=["POST"],
+                           response_model=models.ExtrasSingleImageResponse)
+        self.add_api_route("/sdapi/v1/extra-batch-images", self.extras_batch_images_api, methods=["POST"],
+                           response_model=models.ExtrasBatchImagesResponse)
+        self.add_api_route("/sdapi/v1/png-info", self.pnginfoapi, methods=["POST"],
+                           response_model=models.PNGInfoResponse)
+        self.add_api_route("/sdapi/v1/progress", self.progressapi, methods=["GET"],
+                           response_model=models.ProgressResponse)
         self.add_api_route("/sdapi/v1/interrogate", self.interrogateapi, methods=["POST"])
         self.add_api_route("/sdapi/v1/interrupt", self.interruptapi, methods=["POST"])
         self.add_api_route("/sdapi/v1/skip", self.skip, methods=["POST"])
         self.add_api_route("/sdapi/v1/options", self.get_config, methods=["GET"], response_model=models.OptionsModel)
         self.add_api_route("/sdapi/v1/options", self.set_config, methods=["POST"])
         self.add_api_route("/sdapi/v1/cmd-flags", self.get_cmd_flags, methods=["GET"], response_model=models.FlagsModel)
-        self.add_api_route("/sdapi/v1/samplers", self.get_samplers, methods=["GET"], response_model=list[models.SamplerItem])
-        self.add_api_route("/sdapi/v1/schedulers", self.get_schedulers, methods=["GET"], response_model=list[models.SchedulerItem])
-        self.add_api_route("/sdapi/v1/upscalers", self.get_upscalers, methods=["GET"], response_model=list[models.UpscalerItem])
-        self.add_api_route("/sdapi/v1/latent-upscale-modes", self.get_latent_upscale_modes, methods=["GET"], response_model=list[models.LatentUpscalerModeItem])
-        self.add_api_route("/sdapi/v1/sd-models", self.get_sd_models, methods=["GET"], response_model=list[models.SDModelItem])
-        self.add_api_route("/sdapi/v1/sd-modules", self.get_sd_vaes_and_text_encoders, methods=["GET"], response_model=list[models.SDModuleItem])
-        self.add_api_route("/sdapi/v1/hypernetworks", self.get_hypernetworks, methods=["GET"], response_model=list[models.HypernetworkItem])
-        self.add_api_route("/sdapi/v1/face-restorers", self.get_face_restorers, methods=["GET"], response_model=list[models.FaceRestorerItem])
-        self.add_api_route("/sdapi/v1/realesrgan-models", self.get_realesrgan_models, methods=["GET"], response_model=list[models.RealesrganItem])
-        self.add_api_route("/sdapi/v1/prompt-styles", self.get_prompt_styles, methods=["GET"], response_model=list[models.PromptStyleItem])
-        self.add_api_route("/sdapi/v1/embeddings", self.get_embeddings, methods=["GET"], response_model=models.EmbeddingsResponse)
+        self.add_api_route("/sdapi/v1/samplers", self.get_samplers, methods=["GET"],
+                           response_model=list[models.SamplerItem])
+        self.add_api_route("/sdapi/v1/schedulers", self.get_schedulers, methods=["GET"],
+                           response_model=list[models.SchedulerItem])
+        self.add_api_route("/sdapi/v1/upscalers", self.get_upscalers, methods=["GET"],
+                           response_model=list[models.UpscalerItem])
+        self.add_api_route("/sdapi/v1/latent-upscale-modes", self.get_latent_upscale_modes, methods=["GET"],
+                           response_model=list[models.LatentUpscalerModeItem])
+        self.add_api_route("/sdapi/v1/sd-models", self.get_sd_models, methods=["GET"],
+                           response_model=list[models.SDModelItem])
+        self.add_api_route("/sdapi/v1/sd-modules", self.get_sd_vaes_and_text_encoders, methods=["GET"],
+                           response_model=list[models.SDModuleItem])
+        self.add_api_route("/sdapi/v1/hypernetworks", self.get_hypernetworks, methods=["GET"],
+                           response_model=list[models.HypernetworkItem])
+        self.add_api_route("/sdapi/v1/face-restorers", self.get_face_restorers, methods=["GET"],
+                           response_model=list[models.FaceRestorerItem])
+        self.add_api_route("/sdapi/v1/realesrgan-models", self.get_realesrgan_models, methods=["GET"],
+                           response_model=list[models.RealesrganItem])
+        self.add_api_route("/sdapi/v1/prompt-styles", self.get_prompt_styles, methods=["GET"],
+                           response_model=list[models.PromptStyleItem])
+        self.add_api_route("/sdapi/v1/embeddings", self.get_embeddings, methods=["GET"],
+                           response_model=models.EmbeddingsResponse)
         self.add_api_route("/sdapi/v1/refresh-embeddings", self.refresh_embeddings, methods=["POST"])
         self.add_api_route("/sdapi/v1/refresh-checkpoints", self.refresh_checkpoints, methods=["POST"])
         self.add_api_route("/sdapi/v1/refresh-vae", self.refresh_vae, methods=["POST"])
-        self.add_api_route("/sdapi/v1/create/embedding", self.create_embedding, methods=["POST"], response_model=models.CreateResponse)
-        self.add_api_route("/sdapi/v1/create/hypernetwork", self.create_hypernetwork, methods=["POST"], response_model=models.CreateResponse)
+        self.add_api_route("/sdapi/v1/create/embedding", self.create_embedding, methods=["POST"],
+                           response_model=models.CreateResponse)
+        self.add_api_route("/sdapi/v1/create/hypernetwork", self.create_hypernetwork, methods=["POST"],
+                           response_model=models.CreateResponse)
         self.add_api_route("/sdapi/v1/memory", self.get_memory, methods=["GET"], response_model=models.MemoryResponse)
         self.add_api_route("/sdapi/v1/unload-checkpoint", self.unloadapi, methods=["POST"])
         self.add_api_route("/sdapi/v1/reload-checkpoint", self.reloadapi, methods=["POST"])
-        self.add_api_route("/sdapi/v1/scripts", self.get_scripts_list, methods=["GET"], response_model=models.ScriptsList)
-        self.add_api_route("/sdapi/v1/script-info", self.get_script_info, methods=["GET"], response_model=list[models.ScriptInfo])
-        self.add_api_route("/sdapi/v1/extensions", self.get_extensions_list, methods=["GET"], response_model=list[models.ExtensionItem])
+        self.add_api_route("/sdapi/v1/scripts", self.get_scripts_list, methods=["GET"],
+                           response_model=models.ScriptsList)
+        self.add_api_route("/sdapi/v1/script-info", self.get_script_info, methods=["GET"],
+                           response_model=list[models.ScriptInfo])
+        self.add_api_route("/sdapi/v1/extensions", self.get_extensions_list, methods=["GET"],
+                           response_model=list[models.ExtensionItem])
 
         if shared.cmd_opts.api_server_stop:
             self.add_api_route("/sdapi/v1/server-kill", self.kill_webui, methods=["POST"])
@@ -526,8 +595,6 @@ class Api:
         self.embedding_db.add_embedding_dir(cmd_opts.embeddings_dir)
         self.embedding_db.load_textual_inversion_embeddings(force_reload=True, sync_with_sd_model=False)
 
-
-
     def add_api_route(self, path: str, endpoint, **kwargs):
         if shared.cmd_opts.api_auth:
             return self.app.add_api_route(path, endpoint, dependencies=[Depends(self.auth)], **kwargs)
@@ -538,7 +605,8 @@ class Api:
             if compare_digest(credentials.password, self.credentials[credentials.username]):
                 return True
 
-        raise HTTPException(status_code=401, detail="Incorrect username or password", headers={"WWW-Authenticate": "Basic"})
+        raise HTTPException(status_code=401, detail="Incorrect username or password",
+                            headers={"WWW-Authenticate": "Basic"})
 
     def get_selectable_script(self, script_name, script_runner):
         if script_name is None or script_name == "":
@@ -570,17 +638,17 @@ class Api:
         return script_runner.scripts[script_idx]
 
     def init_default_script_args(self, script_runner):
-        #find max idx from the scripts in runner and generate a none array to init script_args
+        # find max idx from the scripts in runner and generate a none array to init script_args
         last_arg_index = 1
         for script in script_runner.scripts:
             if last_arg_index < script.args_to:
                 last_arg_index = script.args_to
         # None everywhere except position 0 to initialize script args
-        script_args = [None]*last_arg_index
+        script_args = [None] * last_arg_index
         script_args[0] = 0
 
         # get default values
-        with gr.Blocks(): # will throw errors calling ui function without this
+        with gr.Blocks():  # will throw errors calling ui function without this
             for script in script_runner.scripts:
                 if script.ui(script.is_img2img):
                     ui_default_values = []
@@ -589,7 +657,8 @@ class Api:
                     script_args[script.args_from:script.args_to] = ui_default_values
         return script_args
 
-    def init_script_args(self, request, default_script_args, selectable_scripts, selectable_idx, script_runner, *, input_script_args=None):
+    def init_script_args(self, request, default_script_args, selectable_scripts, selectable_idx, script_runner, *,
+                         input_script_args=None):
         script_args = default_script_args.copy()
 
         if input_script_args is not None:
@@ -609,12 +678,15 @@ class Api:
                     raise HTTPException(status_code=422, detail=f"always on script {alwayson_script_name} not found")
                 # Selectable script in always on script param check
                 if alwayson_script.alwayson is False:
-                    raise HTTPException(status_code=422, detail="Cannot have a selectable script in the always on scripts params")
+                    raise HTTPException(status_code=422,
+                                        detail="Cannot have a selectable script in the always on scripts params")
                 # always on script with no arg should always run so you don't really need to add them to the requests
                 if "args" in request.alwayson_scripts[alwayson_script_name]:
                     # min between arg length in scriptrunner and arg length in the request
-                    for idx in range(0, min((alwayson_script.args_to - alwayson_script.args_from), len(request.alwayson_scripts[alwayson_script_name]["args"]))):
-                        script_args[alwayson_script.args_from + idx] = request.alwayson_scripts[alwayson_script_name]["args"][idx]
+                    for idx in range(0, min((alwayson_script.args_to - alwayson_script.args_from),
+                                            len(request.alwayson_scripts[alwayson_script_name]["args"]))):
+                        script_args[alwayson_script.args_from + idx] = \
+                        request.alwayson_scripts[alwayson_script_name]["args"][idx]
         return script_args
 
     def apply_infotext(self, request, tabname, *, script_runner=None, mentioned_script_args=None):
@@ -629,16 +701,17 @@ class Api:
             return {}
 
         possible_fields = infotext_utils.paste_fields[tabname]["fields"]
-        set_fields = request.model_dump(exclude_unset=True) if hasattr(request, "request") else request.dict(exclude_unset=True)  # pydantic v1/v2 have different names for this
+        set_fields = request.model_dump(exclude_unset=True) if hasattr(request, "request") else request.dict(
+            exclude_unset=True)  # pydantic v1/v2 have different names for this
         params = infotext_utils.parse_generation_parameters(request.infotext)
 
         def get_base_type(annotation):
             origin = get_origin(annotation)
-            
-            if origin is Union:             # represents Optional
-                args = get_args(annotation) # filter out NoneType
+
+            if origin is Union:  # represents Optional
+                args = get_args(annotation)  # filter out NoneType
                 non_none_args = [arg for arg in args if arg is not type(None)]
-                if len(non_none_args) == 1: # annotation was Optional[X]
+                if len(non_none_args) == 1:  # annotation was Optional[X]
                     return non_none_args[0]
 
             return annotation
@@ -649,14 +722,15 @@ class Api:
                 return None
 
             if field.api in request.__fields__:
-                target_type = get_base_type(request.__fields__[field.api].annotation) # extract type from Optional[X]
+                target_type = get_base_type(request.__fields__[field.api].annotation)  # extract type from Optional[X]
             else:
                 target_type = type(field.component.value)
 
             if target_type == type(None):
                 return None
 
-            if isinstance(value, dict) and value.get('__type__') == 'generic_update':  # this is a gradio.update rather than a value
+            if isinstance(value, dict) and value.get(
+                    '__type__') == 'generic_update':  # this is a gradio.update rather than a value
                 value = value.get('value')
 
             if value is not None and not isinstance(value, target_type):
@@ -685,7 +759,8 @@ class Api:
 
         if script_runner is not None and mentioned_script_args is not None:
             indexes = {v: i for i, v in enumerate(script_runner.inputs)}
-            script_fields = ((field, indexes[field.component]) for field in possible_fields if field.component in indexes)
+            script_fields = ((field, indexes[field.component]) for field in possible_fields if
+                             field.component in indexes)
 
             for field, index in script_fields:
                 value = get_field_value(field, params)
@@ -697,39 +772,34 @@ class Api:
 
         return params
 
-
-
-
-
     def text2logoapi(self, txt2logoreq: models.StableDiffusionProcessingTxt2Logo):
 
         check_or_fetch_ai_logo_styles()
         # check_or_fetch_ai_template_styles()
         global style_dict_list
         global log_entry
-        
 
         # base_prompt = ("You are a professional logo designer. You will create high quality award winning professional "
         #                "design made for both digital and print media that only contains few vector shapes.")
-        
-        base_prompt=("""Create a logo """)
-        
-        if len(txt2logoreq.brand_name)==0:
-            brand_name_prompt=""
-            base_prompt="""Create a logo """
-        else :
-            brand_name_prompt = (f"""brand name is '{txt2logoreq.brand_name}', spelling out the words '{txt2logoreq.brand_name}' """)
-        
-        # model_prompt= ""                    
-        
-        string_word_count= txt2logoreq.prompt.split()
 
+        base_prompt = ("""Create a logo """)
 
-        if len(string_word_count)<=5:
-            user_prompt= f"""{base_prompt} ,{brand_name_prompt} ,{txt2logoreq.prompt} ,{get_prompt_by_style_id(txt2logoreq.style_id)}"""
-            enhanced_prompt=magic_prompt_main(user_prompt)
-        else :
-            enhanced_prompt=f"""{base_prompt} {brand_name_prompt} {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} """
+        if len(txt2logoreq.brand_name) == 0:
+            brand_name_prompt = ""
+            base_prompt = """Create a logo """
+        else:
+            brand_name_prompt = (
+                f"""brand name is '{txt2logoreq.brand_name}', spelling out the words '{txt2logoreq.brand_name}' """)
+
+        # model_prompt= ""
+
+        string_word_count = txt2logoreq.prompt.split()
+
+        if len(string_word_count) <= 5:
+            user_prompt = f"""{base_prompt} ,{brand_name_prompt} ,{txt2logoreq.prompt} ,{get_prompt_by_style_id(txt2logoreq.style_id)}"""
+            enhanced_prompt = magic_prompt_main(user_prompt)
+        else:
+            enhanced_prompt = f"""{base_prompt} {brand_name_prompt} {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} """
 
         txt2imgreq = models.StableDiffusionTxt2ImgProcessingAPI(
             # prompt=f"""{base_prompt} {brand_name_prompt} {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} """,
@@ -743,13 +813,14 @@ class Api:
         # print(txt2imgreq.prompt)
         task_id = txt2imgreq.force_task_id or create_task_id("txt2img")
         script_runner = scripts.scripts_txt2img
-       
 
         infotext_script_args = {}
-        self.apply_infotext(txt2imgreq, "txt2img", script_runner=script_runner, mentioned_script_args=infotext_script_args)
+        self.apply_infotext(txt2imgreq, "txt2img", script_runner=script_runner,
+                            mentioned_script_args=infotext_script_args)
 
         selectable_scripts, selectable_script_idx = self.get_selectable_script(txt2imgreq.script_name, script_runner)
-        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(txt2imgreq.sampler_name or txt2imgreq.sampler_index, txt2imgreq.scheduler)
+        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(txt2imgreq.sampler_name or txt2imgreq.sampler_index,
+                                                                   txt2imgreq.scheduler)
 
         populate = txt2imgreq.copy(update={  # Override __init__ params
             "sampler_name": validate_sampler_name(sampler),
@@ -764,11 +835,13 @@ class Api:
 
         args = vars(populate)
         args.pop('script_name', None)
-        args.pop('script_args', None) # will refeed them to the pipeline directly after initializing them
+        args.pop('script_args', None)  # will refeed them to the pipeline directly after initializing them
         args.pop('alwayson_scripts', None)
         args.pop('infotext', None)
 
-        script_args = self.init_script_args(txt2imgreq, self.default_script_arg_txt2img, selectable_scripts, selectable_script_idx, script_runner, input_script_args=infotext_script_args)
+        script_args = self.init_script_args(txt2imgreq, self.default_script_arg_txt2img, selectable_scripts,
+                                            selectable_script_idx, script_runner,
+                                            input_script_args=infotext_script_args)
 
         send_images = args.pop('send_images', True)
         args.pop('save_images', None)
@@ -787,13 +860,13 @@ class Api:
                 try:
                     shared.state.begin(job="scripts_txt2img")
                     start_task(task_id)
-                    current= time.time()
+                    current = time.time()
 
                     if selectable_scripts is not None:
                         p.script_args = script_args
-                        processed = scripts.scripts_txt2img.run(p, *p.script_args) # Need to pass args as list here
+                        processed = scripts.scripts_txt2img.run(p, *p.script_args)  # Need to pass args as list here
                     else:
-                        p.script_args = tuple(script_args) # Need to pass args as tuple here
+                        p.script_args = tuple(script_args)  # Need to pass args as tuple here
                         processed = process_images(p)
                     process_extra_images(processed)
                     finish_task(task_id)
@@ -809,30 +882,30 @@ class Api:
         date_and_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         jpg_images = convert_base64_to_jpeg(b64images)
-        log_entry= set_style_dict_list(date_and_timestamp,txt2logoreq.prompt,txt2logoreq.brand_name,txt2logoreq.style_id)
+        log_entry = set_style_dict_list(date_and_timestamp, txt2logoreq.prompt, txt2logoreq.brand_name,
+                                        txt2logoreq.style_id, enhanced_prompt)
         get_the_image_name_and_save(jpg_images)
-        finished=time.time()
-        server_process_time= finished-current
+        finished = time.time()
+        server_process_time = finished - current
         # return models.TextToImageResponse(images=b64images, parameters=vars(txt2logoreq), info=processed.js())
 
-        return models.TextToLogoResponse(success=success, message=message, server_process_time=server_process_time , output_image_url=jpg_images)
-
-
+        return models.TextToLogoResponse(success=success, message=message, server_process_time=server_process_time,
+                                         output_image_url=jpg_images)
 
     def temp2logoapi(self, temp2logoreq: models.StableDiffusionProcessingTemplate2Logo):
 
-
         check_or_fetch_ai_template_styles()
+        check_or_fetch_ai_logo_styles()
         global style_dict_list
         global log_entry
         base_prompt = get_prompt_by_item_id_category_id(temp2logoreq.category_id, temp2logoreq.item_id)
 
-        
-        user_prompt=f"""Base Prompt: {base_prompt}
-        user changed instruction :  Brand Name replace with {temp2logoreq.brand_name}, Others changes {temp2logoreq.prompt}  
+        user_prompt = f"""Base Prompt: {base_prompt}
+        user change instruction :  Brand Name replace with {temp2logoreq.brand_name}, Others changes {temp2logoreq.prompt}  
         """
-        edited_prompt=edit_template_main(user_prompt)
-        
+        log_prompt = f"""user change instruction :  Brand Name replace with {temp2logoreq.brand_name}, Others changes {temp2logoreq.prompt} """
+        edited_prompt = edit_template_main(user_prompt)
+
         txt2imgreq = models.StableDiffusionTxt2ImgProcessingAPI(
             # prompt=f"""{base_prompt} {brand_name_prompt} {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} """,
             prompt=edited_prompt,
@@ -842,16 +915,17 @@ class Api:
             steps=30,
             cfg_scale=1.0
         )
-        # print(txt2imgreq.prompt)
+        print(txt2imgreq.prompt)
         task_id = txt2imgreq.force_task_id or create_task_id("txt2img")
         script_runner = scripts.scripts_txt2img
-       
 
         infotext_script_args = {}
-        self.apply_infotext(txt2imgreq, "txt2img", script_runner=script_runner, mentioned_script_args=infotext_script_args)
+        self.apply_infotext(txt2imgreq, "txt2img", script_runner=script_runner,
+                            mentioned_script_args=infotext_script_args)
 
         selectable_scripts, selectable_script_idx = self.get_selectable_script(txt2imgreq.script_name, script_runner)
-        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(txt2imgreq.sampler_name or txt2imgreq.sampler_index, txt2imgreq.scheduler)
+        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(txt2imgreq.sampler_name or txt2imgreq.sampler_index,
+                                                                   txt2imgreq.scheduler)
 
         populate = txt2imgreq.copy(update={  # Override __init__ params
             "sampler_name": validate_sampler_name(sampler),
@@ -866,11 +940,13 @@ class Api:
 
         args = vars(populate)
         args.pop('script_name', None)
-        args.pop('script_args', None) # will refeed them to the pipeline directly after initializing them
+        args.pop('script_args', None)  # will refeed them to the pipeline directly after initializing them
         args.pop('alwayson_scripts', None)
         args.pop('infotext', None)
 
-        script_args = self.init_script_args(txt2imgreq, self.default_script_arg_txt2img, selectable_scripts, selectable_script_idx, script_runner, input_script_args=infotext_script_args)
+        script_args = self.init_script_args(txt2imgreq, self.default_script_arg_txt2img, selectable_scripts,
+                                            selectable_script_idx, script_runner,
+                                            input_script_args=infotext_script_args)
 
         send_images = args.pop('send_images', True)
         args.pop('save_images', None)
@@ -889,13 +965,13 @@ class Api:
                 try:
                     shared.state.begin(job="scripts_txt2img")
                     start_task(task_id)
-                    current= time.time()
+                    current = time.time()
 
                     if selectable_scripts is not None:
                         p.script_args = script_args
-                        processed = scripts.scripts_txt2img.run(p, *p.script_args) # Need to pass args as list here
+                        processed = scripts.scripts_txt2img.run(p, *p.script_args)  # Need to pass args as list here
                     else:
-                        p.script_args = tuple(script_args) # Need to pass args as tuple here
+                        p.script_args = tuple(script_args)  # Need to pass args as tuple here
                         processed = process_images(p)
                     process_extra_images(processed)
                     finish_task(task_id)
@@ -911,17 +987,18 @@ class Api:
         date_and_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         jpg_images = convert_base64_to_jpeg(b64images)
-        # log_entry= set_style_dict_list(date_and_timestamp,txt2logoreq.prompt,txt2logoreq.brand_name,txt2logoreq.style_id)
-        # get_the_image_name_and_save(jpg_images)
-        finished=time.time()
-        server_process_time= finished-current
+
+        # log_entry= set_style_dict_list(date_and_timestamp,txt2logoreq.prompt, txt2logoreq.brand_name,txt2logoreq.style_id)
+
+        get_image_category_enhanced_save(jpg_images, date_and_timestamp, temp2logoreq.category_id, temp2logoreq.item_id,
+                                         log_prompt, edited_prompt)
+        finished = time.time()
+        server_process_time = finished - current
         # return models.TextToImageResponse(images=b64images, parameters=vars(txt2logoreq), info=processed.js())
 
-        return models.TextToLogoResponse(success=success, message=message, server_process_time=server_process_time , output_image_url=jpg_images)
+        return models.TextToLogoResponse(success=success, message=message, server_process_time=server_process_time,
+                                         output_image_url=jpg_images)
         # return "hello"
-
-
-
 
     def text2imgapi(self, txt2imgreq: models.StableDiffusionTxt2ImgProcessingAPI):
         task_id = txt2imgreq.force_task_id or create_task_id("txt2img")
@@ -929,10 +1006,12 @@ class Api:
         script_runner = scripts.scripts_txt2img
 
         infotext_script_args = {}
-        self.apply_infotext(txt2imgreq, "txt2img", script_runner=script_runner, mentioned_script_args=infotext_script_args)
+        self.apply_infotext(txt2imgreq, "txt2img", script_runner=script_runner,
+                            mentioned_script_args=infotext_script_args)
 
         selectable_scripts, selectable_script_idx = self.get_selectable_script(txt2imgreq.script_name, script_runner)
-        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(txt2imgreq.sampler_name or txt2imgreq.sampler_index, txt2imgreq.scheduler)
+        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(txt2imgreq.sampler_name or txt2imgreq.sampler_index,
+                                                                   txt2imgreq.scheduler)
 
         populate = txt2imgreq.copy(update={  # Override __init__ params
             "sampler_name": validate_sampler_name(sampler),
@@ -947,11 +1026,13 @@ class Api:
 
         args = vars(populate)
         args.pop('script_name', None)
-        args.pop('script_args', None) # will refeed them to the pipeline directly after initializing them
+        args.pop('script_args', None)  # will refeed them to the pipeline directly after initializing them
         args.pop('alwayson_scripts', None)
         args.pop('infotext', None)
 
-        script_args = self.init_script_args(txt2imgreq, self.default_script_arg_txt2img, selectable_scripts, selectable_script_idx, script_runner, input_script_args=infotext_script_args)
+        script_args = self.init_script_args(txt2imgreq, self.default_script_arg_txt2img, selectable_scripts,
+                                            selectable_script_idx, script_runner,
+                                            input_script_args=infotext_script_args)
 
         send_images = args.pop('send_images', True)
         args.pop('save_images', None)
@@ -970,9 +1051,9 @@ class Api:
                     start_task(task_id)
                     if selectable_scripts is not None:
                         p.script_args = script_args
-                        processed = scripts.scripts_txt2img.run(p, *p.script_args) # Need to pass args as list here
+                        processed = scripts.scripts_txt2img.run(p, *p.script_args)  # Need to pass args as list here
                     else:
-                        p.script_args = tuple(script_args) # Need to pass args as tuple here
+                        p.script_args = tuple(script_args)  # Need to pass args as tuple here
                         processed = process_images(p)
                     process_extra_images(processed)
                     finish_task(task_id)
@@ -998,10 +1079,12 @@ class Api:
         script_runner = scripts.scripts_img2img
 
         infotext_script_args = {}
-        self.apply_infotext(img2imgreq, "img2img", script_runner=script_runner, mentioned_script_args=infotext_script_args)
+        self.apply_infotext(img2imgreq, "img2img", script_runner=script_runner,
+                            mentioned_script_args=infotext_script_args)
 
         selectable_scripts, selectable_script_idx = self.get_selectable_script(img2imgreq.script_name, script_runner)
-        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(img2imgreq.sampler_name or img2imgreq.sampler_index, img2imgreq.scheduler)
+        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(img2imgreq.sampler_name or img2imgreq.sampler_index,
+                                                                   img2imgreq.scheduler)
 
         populate = img2imgreq.copy(update={  # Override __init__ params
             "sampler_name": validate_sampler_name(sampler),
@@ -1016,13 +1099,16 @@ class Api:
             populate.scheduler = scheduler
 
         args = vars(populate)
-        args.pop('include_init_images', None)  # this is meant to be done by "exclude": True in model, but it's for a reason that I cannot determine.
+        args.pop('include_init_images',
+                 None)  # this is meant to be done by "exclude": True in model, but it's for a reason that I cannot determine.
         args.pop('script_name', None)
         args.pop('script_args', None)  # will refeed them to the pipeline directly after initializing them
         args.pop('alwayson_scripts', None)
         args.pop('infotext', None)
 
-        script_args = self.init_script_args(img2imgreq, self.default_script_arg_img2img, selectable_scripts, selectable_script_idx, script_runner, input_script_args=infotext_script_args)
+        script_args = self.init_script_args(img2imgreq, self.default_script_arg_img2img, selectable_scripts,
+                                            selectable_script_idx, script_runner,
+                                            input_script_args=infotext_script_args)
 
         send_images = args.pop('send_images', True)
         args.pop('save_images', None)
@@ -1042,9 +1128,9 @@ class Api:
                     start_task(task_id)
                     if selectable_scripts is not None:
                         p.script_args = script_args
-                        processed = scripts.scripts_img2img.run(p, *p.script_args) # Need to pass args as list here
+                        processed = scripts.scripts_img2img.run(p, *p.script_args)  # Need to pass args as list here
                     else:
-                        p.script_args = tuple(script_args) # Need to pass args as tuple here
+                        p.script_args = tuple(script_args)  # Need to pass args as tuple here
                         processed = process_images(p)
                     process_extra_images(processed)
                     finish_task(task_id)
@@ -1066,7 +1152,8 @@ class Api:
         reqDict['image'] = decode_base64_to_image(reqDict['image'])
 
         with self.queue_lock:
-            result = postprocessing.run_extras(extras_mode=0, image_folder="", input_dir="", output_dir="", save_output=False, **reqDict)
+            result = postprocessing.run_extras(extras_mode=0, image_folder="", input_dir="", output_dir="",
+                                               save_output=False, **reqDict)
 
         return models.ExtrasSingleImageResponse(image=encode_pil_to_base64(result[0][0]), html_info=result[1])
 
@@ -1077,7 +1164,8 @@ class Api:
         image_folder = [decode_base64_to_image(x.data) for x in image_list]
 
         with self.queue_lock:
-            result = postprocessing.run_extras(extras_mode=1, image_folder=image_folder, image="", input_dir="", output_dir="", save_output=False, **reqDict)
+            result = postprocessing.run_extras(extras_mode=1, image_folder=image_folder, image="", input_dir="",
+                                               output_dir="", save_output=False, **reqDict)
 
         return models.ExtrasBatchImagesResponse(images=list(map(encode_pil_to_base64, result[0])), html_info=result[1])
 
@@ -1099,7 +1187,8 @@ class Api:
         # copy from check_progress_call of ui.py
 
         if shared.state.job_count == 0:
-            return models.ProgressResponse(progress=0, eta_relative=0, state=shared.state.dict(), textinfo=shared.state.textinfo)
+            return models.ProgressResponse(progress=0, eta_relative=0, state=shared.state.dict(),
+                                           textinfo=shared.state.textinfo)
 
         # avoid dividing zero
         progress = 0.01
@@ -1110,8 +1199,8 @@ class Api:
             progress += 1 / shared.state.job_count * shared.state.sampling_step / shared.state.sampling_steps
 
         time_since_start = time.time() - shared.state.time_start
-        eta = (time_since_start/progress)
-        eta_relative = eta-time_since_start
+        eta = (time_since_start / progress)
+        eta_relative = eta - time_since_start
 
         progress = min(progress, 1)
 
@@ -1121,7 +1210,9 @@ class Api:
         if shared.state.current_image and not req.skip_current_image:
             current_image = encode_pil_to_base64(shared.state.current_image)
 
-        return models.ProgressResponse(progress=progress, eta_relative=eta_relative, state=shared.state.dict(), current_image=current_image, textinfo=shared.state.textinfo, current_task=current_task)
+        return models.ProgressResponse(progress=progress, eta_relative=eta_relative, state=shared.state.dict(),
+                                       current_image=current_image, textinfo=shared.state.textinfo,
+                                       current_task=current_task)
 
     def interrogateapi(self, interrogatereq: models.InterrogateRequest):
         image_b64 = interrogatereq.image
@@ -1172,7 +1263,8 @@ class Api:
         return vars(shared.cmd_opts)
 
     def get_samplers(self):
-        return [{"name": sampler[0], "aliases":sampler[2], "options":sampler[3]} for sampler in sd_samplers.all_samplers]
+        return [{"name": sampler[0], "aliases": sampler[2], "options": sampler[3]} for sampler in
+                sd_samplers.all_samplers]
 
     def get_schedulers(self):
         return [
@@ -1207,7 +1299,9 @@ class Api:
 
     def get_sd_models(self):
         import modules.sd_models as sd_models
-        return [{"title": x.title, "model_name": x.model_name, "hash": x.shorthash, "sha256": x.sha256, "filename": x.filename, "config": getattr(x, 'config', None)} for x in sd_models.checkpoints_list.values()]
+        return [{"title": x.title, "model_name": x.model_name, "hash": x.shorthash, "sha256": x.sha256,
+                 "filename": x.filename, "config": getattr(x, 'config', None)} for x in
+                sd_models.checkpoints_list.values()]
 
     def get_sd_vaes_and_text_encoders(self):
         from modules_forge.main_entry import module_list
@@ -1217,16 +1311,16 @@ class Api:
         return [{"name": name, "path": shared.hypernetworks[name]} for name in shared.hypernetworks]
 
     def get_face_restorers(self):
-        return [{"name":x.name(), "cmd_dir": getattr(x, "cmd_dir", None)} for x in shared.face_restorers]
+        return [{"name": x.name(), "cmd_dir": getattr(x, "cmd_dir", None)} for x in shared.face_restorers]
 
     def get_realesrgan_models(self):
-        return [{"name":x.name,"path":x.data_path, "scale":x.scale} for x in get_realesrgan_models(None)]
+        return [{"name": x.name, "path": x.data_path, "scale": x.scale} for x in get_realesrgan_models(None)]
 
     def get_prompt_styles(self):
         styleList = []
         for k in shared.prompt_styles.styles:
             style = shared.prompt_styles.styles[k]
-            styleList.append({"name":style[0], "prompt": style[1], "negative_prompt": style[2]})
+            styleList.append({"name": style[0], "prompt": style[1], "negative_prompt": style[2]})
 
         return styleList
 
@@ -1263,8 +1357,9 @@ class Api:
     def create_embedding(self, args: dict):
         try:
             shared.state.begin(job="create_embedding")
-            filename = modules.textual_inversion.textual_inversion.create_embedding(**args) # create empty embedding
-            self.embedding_db.load_textual_inversion_embeddings(force_reload=True, sync_with_sd_model=False) # reload embeddings so new one can be immediately used
+            filename = modules.textual_inversion.textual_inversion.create_embedding(**args)  # create empty embedding
+            self.embedding_db.load_textual_inversion_embeddings(force_reload=True,
+                                                                sync_with_sd_model=False)  # reload embeddings so new one can be immediately used
             return models.CreateResponse(info=f"create embedding filename: {filename}")
         except AssertionError as e:
             return models.TrainResponse(info=f"create embedding error: {e}")
@@ -1274,7 +1369,7 @@ class Api:
     def create_hypernetwork(self, args: dict):
         try:
             shared.state.begin(job="create_hypernetwork")
-            filename = create_hypernetwork(**args) # create empty embedding
+            filename = create_hypernetwork(**args)  # create empty embedding
             return models.CreateResponse(info=f"create hypernetwork filename: {filename}")
         except AssertionError as e:
             return models.TrainResponse(info=f"create hypernetwork error: {e}")
@@ -1286,22 +1381,23 @@ class Api:
             import os
             import psutil
             process = psutil.Process(os.getpid())
-            res = process.memory_info() # only rss is cross-platform guaranteed so we dont rely on other values
-            ram_total = 100 * res.rss / process.memory_percent() # and total memory is calculated as actual value is not cross-platform safe
-            ram = { 'free': ram_total - res.rss, 'used': res.rss, 'total': ram_total }
+            res = process.memory_info()  # only rss is cross-platform guaranteed so we dont rely on other values
+            ram_total = 100 * res.rss / process.memory_percent()  # and total memory is calculated as actual value is not cross-platform safe
+            ram = {'free': ram_total - res.rss, 'used': res.rss, 'total': ram_total}
         except Exception as err:
-            ram = { 'error': f'{err}' }
+            ram = {'error': f'{err}'}
         try:
             import torch
             if torch.cuda.is_available():
                 s = torch.cuda.mem_get_info()
-                system = { 'free': s[0], 'used': s[1] - s[0], 'total': s[1] }
+                system = {'free': s[0], 'used': s[1] - s[0], 'total': s[1]}
                 s = dict(torch.cuda.memory_stats(shared.device))
-                allocated = { 'current': s['allocated_bytes.all.current'], 'peak': s['allocated_bytes.all.peak'] }
-                reserved = { 'current': s['reserved_bytes.all.current'], 'peak': s['reserved_bytes.all.peak'] }
-                active = { 'current': s['active_bytes.all.current'], 'peak': s['active_bytes.all.peak'] }
-                inactive = { 'current': s['inactive_split_bytes.all.current'], 'peak': s['inactive_split_bytes.all.peak'] }
-                warnings = { 'retries': s['num_alloc_retries'], 'oom': s['num_ooms'] }
+                allocated = {'current': s['allocated_bytes.all.current'], 'peak': s['allocated_bytes.all.peak']}
+                reserved = {'current': s['reserved_bytes.all.current'], 'peak': s['reserved_bytes.all.peak']}
+                active = {'current': s['active_bytes.all.current'], 'peak': s['active_bytes.all.peak']}
+                inactive = {'current': s['inactive_split_bytes.all.current'],
+                            'peak': s['inactive_split_bytes.all.peak']}
+                warnings = {'retries': s['num_alloc_retries'], 'oom': s['num_ooms']}
                 cuda = {
                     'system': system,
                     'active': active,
@@ -1328,10 +1424,10 @@ class Api:
                     "name": ext.name,
                     "remote": ext.remote,
                     "branch": ext.branch,
-                    "commit_hash":ext.commit_hash,
-                    "commit_date":ext.commit_date,
-                    "version":ext.version,
-                    "enabled":ext.enabled
+                    "commit_hash": ext.commit_hash,
+                    "commit_date": ext.commit_date,
+                    "version": ext.version,
+                    "enabled": ext.enabled
                 })
         return ext_list
 
@@ -1358,5 +1454,4 @@ class Api:
     def stop_webui(request):
         shared.state.server_command = "stop"
         return Response("Stopping.")
-
 
