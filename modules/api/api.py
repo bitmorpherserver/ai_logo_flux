@@ -163,7 +163,7 @@ def check_or_fetch_ai_logo_styles(api_endpoint: str = "https://logo-maker.online
 
 
 def check_or_fetch_ai_template_styles(
-        api_endpoint: str = "https://logo-maker.online:8030/api/ai-logo-template/v1/template-json") -> bool:
+        api_endpoint: str = "https://logo-maker.online/api/ai-logo-template/v1/template-json") -> bool:
     file_path = Path("style") / "ai_logo_templates_v1.json"
 
     if file_path.is_file():
