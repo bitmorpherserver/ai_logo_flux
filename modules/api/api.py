@@ -796,7 +796,7 @@ class Api:
         string_word_count = txt2logoreq.prompt.split()
 
         if len(string_word_count) <= 5:
-            user_prompt = f"""{base_prompt} ,{brand_name_prompt} ,{txt2logoreq.prompt} ,{get_prompt_by_style_id(txt2logoreq.style_id)}"""
+            user_prompt = f"""{base_prompt} {brand_name_prompt} {txt2logoreq.prompt}, {get_prompt_by_style_id(txt2logoreq.style_id)}"""
             enhanced_prompt = magic_prompt_main(user_prompt)
         else:
             enhanced_prompt = f"""{base_prompt} {brand_name_prompt} {txt2logoreq.prompt} {get_prompt_by_style_id(txt2logoreq.style_id)} """

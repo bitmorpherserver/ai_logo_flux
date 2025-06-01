@@ -9,9 +9,18 @@ def main(prompt: str):
     load_dotenv()
     
     # Create the service
+    # service = PromptEnhancerService(
+    #     provider="openai",
+    #     config={
+    #         "temperature": 0.8,
+    #         "max_tokens": 1500
+    #     }
+    # )
+
     service = PromptEnhancerService(
         provider="openai",
         config={
+            "model": "gpt-4.1-nano",
             "temperature": 0.8,
             "max_tokens": 1500
         }
