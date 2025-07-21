@@ -143,8 +143,8 @@ class StableDiffusionProcessing:
     steps: int = 50
     cfg_scale: float = 7.0
     distilled_cfg_scale: float = 3.5
-    width: int = 512
-    height: int = 512
+    width: int = 800
+    height: int = 800
     restore_faces: bool = None
     tiling: bool = None
     do_not_save_samples: bool = False
